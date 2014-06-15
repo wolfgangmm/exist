@@ -156,7 +156,7 @@
     -->
     <db-connection cacheSize="@cacheSize@M" checkMaxCacheSize="true" collectionCache="64M" database="@database@"
         files="@dataDir@" pageSize="4096" nodesBuffer="1000" cacheShrinkThreshold="10000"
-        doc-ids="default" minDiskSpace="128M">
+        doc-ids="default" minDiskSpace="128M" store="org.exist.storage.btree.NIOStore">
 
         <!--
             Startup Triggers are executed before the database becomes generally available

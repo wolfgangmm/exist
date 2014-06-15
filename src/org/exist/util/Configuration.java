@@ -24,6 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 import org.exist.repo.Deployment;
 
+import org.exist.storage.btree.Store;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -765,6 +766,13 @@ public class Configuration implements ErrorHandler
             }
             config.put( BrokerPool.PROPERTY_DATA_DIR, df.getAbsolutePath() );
             LOG.debug( BrokerPool.PROPERTY_DATA_DIR + ": " + config.get( BrokerPool.PROPERTY_DATA_DIR ) );
+        }
+
+        final String store = getConfigAttributeValue(con, Store.CONFIG_ATTRIBUTE);
+        if (store != null) {
+            config.put(Store.CONFIG_PROPERTY, store);
+        } else {
+            config.put(Store.CONFIG_PROPERTY, Store.DEFAULT_IMPLEMENTATION);
         }
 
         String cacheMem = getConfigAttributeValue( con, DefaultCacheManager.CACHE_SIZE_ATTRIBUTE );
