@@ -125,7 +125,20 @@ public abstract class Paged {
 
     protected static int PAGE_SIZE = 4096;
 
-    private RandomAccessFile raf;
+    public static Store create(String storeClass) throws IOException, DBException {
+        try {
+            Class clazz = Class.forName(storeClass);
+            if (!Store.class.isAssignableFrom(clazz)) {
+                throw new DBException("Invalid store implementation: " + storeClass + ". Class not found");
+            }
+            return (Store) clazz.newInstance();
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+            throw new DBException("Error instantiating store implementation: " + storeClass + ": " + e.getMessage());
+        }
+    }
+
+    private String storeImpl;
+    private Store store;
     private File file;
     private FileHeader fileHeader;
     private boolean readOnly = false;
@@ -138,6 +151,7 @@ public abstract class Paged {
         fileHeader = createFileHeader(pool.getPageSize());
         tempPageData = new byte[fileHeader.pageSize];
         tempHeaderData = new byte[fileHeader.pageHeaderSize];
+        storeImpl = pool.getConfiguration().getProperty(Store.CONFIG_PROPERTY).toString();
     }
 
     public abstract short getFileVersion();
@@ -162,7 +176,7 @@ public abstract class Paged {
      */
     public boolean close() throws DBException {
         try {
-            raf.close();
+            store.close();
         } catch (final IOException e) {
             throw new DBException("an error occurred while closing database file: " + e.getMessage());
         }
@@ -225,10 +239,10 @@ public abstract class Paged {
      * @throws IOException
      */
     public void backupToStream(OutputStream os) throws IOException {
-        raf.seek(0);
+        store.seek(0);
         final byte[] buf = new byte[4096];
         int len;
-        while ((len = raf.read(buf)) > 0) {
+        while ((len = store.read(buf)) > 0) {
             os.write(buf, 0, len);
         }
     }
@@ -258,7 +272,7 @@ public abstract class Paged {
      */
     public void closeAndRemove() {
         try {
-            raf.close();
+            store.close();
         } catch (final IOException e) {
             //TODO : forward the exception ? -pb
             LOG.error("Failed to close data file: " + file.getAbsolutePath());
@@ -385,21 +399,24 @@ public abstract class Paged {
         try {
             if ((!file.exists()) || file.canWrite()) {
                 try {
-                    raf = new RandomAccessFile(file, "rw");
-                    final FileChannel channel = raf.getChannel();   
-                    final FileLock lock = channel.tryLock();
+                    store = create(storeImpl);
+                    LOG.info("Using store implementation: " + store.getClass().getName());
+                    store.open(file.toPath(), Store.Mode.READ_WRITE);
+                    final FileLock lock = store.tryLock();
                     if (lock == null)
                         {readOnly = true;}
                 //TODO : who will release the lock ? -pb
                 } catch (final NonWritableChannelException e) {
                     //No way : switch to read-only mode
                     readOnly = true;
-                    raf = new RandomAccessFile(file, "r");
+                    store = create(storeImpl);
+                    store.open(file.toPath(), Store.Mode.READ);
                     LOG.warn(e);
                 }
             } else {
                 readOnly = true;
-                raf = new RandomAccessFile(file, "r");
+                store = create(storeImpl);
+                store.open(file.toPath(), Store.Mode.READ);
             }
         } catch (final IOException e) {
             LOG.warn("An exception occured while opening database file " +
@@ -432,17 +449,6 @@ public abstract class Paged {
                 fileHeader.setDirty(true);
             }
         }
-    }
-
-    /**
-     *  Unlinks a set of pages starting at the specified page
-     *  number.
-     *
-     *@param pageNum A page number
-     *@throws IOException if an exception occurs
-     */
-    protected final void unlinkPages(long pageNum) throws IOException {
-        unlinkPages(getPage(pageNum));
     }
 
     protected void reuseDeleted(Page page) throws IOException {
@@ -492,17 +498,6 @@ public abstract class Paged {
             pageHeader.dataLen = data.length;
         }
         page.write(data);
-    }
-
-    /**
-     *  Writes the multi-Paged Value starting at the specified page number.
-     *
-     *@param  page          The starting page number
-     *@param  value         The Value to write
-     *@throws  IOException  if an Exception occurs
-     */
-    protected final void writeValue(long page, Value value) throws IOException {
-        writeValue(getPage(page), value);
     }
 
     /**
@@ -567,12 +562,6 @@ public abstract class Paged {
             workSize = pageSize - pageHeaderSize;
         }
 
-        /**  Decrement the number of records being managed by the file */
-        public final synchronized void decRecordCount() {
-            recordCount--;
-            dirty = true;
-        }
-
         /**
          *  The first free page in unused secondary space
          *
@@ -580,42 +569,6 @@ public abstract class Paged {
          */
         public final long getFirstFreePage() {
             return firstFreePage;
-        }
-
-        /**
-         *  The size of the FileHeader. Usually 1 OS Page
-         *
-         *@return The size value
-         */
-        public final short getHeaderSize() {
-            return headerSize;
-        }
-
-        /**
-         *  The last free page in unused secondary space
-         *
-         *@return    The lastFreePage value
-         */
-        public final long getLastFreePage() {
-            return lastFreePage;
-        }
-
-        /**
-         *  The maximum number of bytes a key can be. 256 is good
-         *
-         *@return    The maxKeySize value
-         */
-        public int getMaxKeySize() {
-            return maxKeySize;
-        }
-
-        /**
-         *  The number of pages in primary storage
-         *
-         *@return    The pageCount value
-         */
-        public final long getPageCount() {
-            return pageCount;
         }
 
         /**
@@ -634,15 +587,6 @@ public abstract class Paged {
          */
         public final int getPageSize() {
             return pageSize;
-        }
-
-        /**
-         *  The number of records being managed by the file (not pages)
-         *
-         *@return    The number of records
-         */
-        public final long getRecordCount() {
-            return recordCount;
         }
 
         /**
@@ -666,12 +610,6 @@ public abstract class Paged {
         public final short getVersion() {
             return versionId;
         }
-        
-        /**  Increment the number of records being managed by the file */
-        public final synchronized void incRecordCount() {
-            recordCount++;
-            dirty = true;
-        }
 
         /**
          * Returns whether this page has been modified or not.
@@ -683,8 +621,8 @@ public abstract class Paged {
         }
 
         public final synchronized void read() throws IOException {
-            raf.seek(0);
-            raf.read(buf);
+            store.seek(0);
+            store.read(buf);
             read(buf);
             calculateWorkSize();
             dirty = false;
@@ -738,16 +676,6 @@ public abstract class Paged {
         }
 
         /**
-         *  The size of the FileHeader. Usually 1 OS Page
-         *
-         *@param  headerSize  The new headerSize value
-         */
-        public final void setHeaderSize(short headerSize) {
-            this.headerSize = headerSize;
-            dirty = true;
-        }
-
-        /**
          *  The last free page in unused secondary space
          *
          *@param  lastFreePage  The new lastFreePage value
@@ -758,33 +686,12 @@ public abstract class Paged {
         }
 
         /**
-         *  The maximum number of bytes a key can be. 256 is good
-         *
-         *@param  maxKeySize  The new maximum size for a key
-         */
-        public final void setMaxKeySize(short maxKeySize) {
-            this.maxKeySize = maxKeySize;
-            dirty = true;
-        }
-
-        /**
          *  The number of pages in primary storage
          *
          *@param  pageCount  The new pageCount value
          */
         public final void setPageCount(long pageCount) {
             this.pageCount = pageCount;
-            dirty = true;
-        }
-
-        /**
-         *  The size of a page header. 64 is sufficient
-         *
-         *@param  pageHeaderSize  The new pageHeaderSize value
-         */
-        public final void setPageHeaderSize(byte pageHeaderSize) {
-            this.pageHeaderSize = pageHeaderSize;
-            calculateWorkSize();
             dirty = true;
         }
 
@@ -800,16 +707,6 @@ public abstract class Paged {
         }
 
         /**
-         *  The number of records being managed by the file (not pages)
-         *
-         *@param  recordCount  The new recordCount value
-         */
-        public final void setRecordCount(long recordCount) {
-            this.recordCount = recordCount;
-            dirty = true;
-        }
-
-        /**
          *  The number of total pages in the file
          *
          *@param  totalCount  The new totalCount value
@@ -820,9 +717,9 @@ public abstract class Paged {
         }
 
         public final synchronized void write() throws IOException {
-            raf.seek(0);
+            store.seek(0);
             write(buf);
-            raf.write(buf);
+            store.write(buf);
             dirty = false;
         }
 
@@ -844,8 +741,6 @@ public abstract class Paged {
         /**  This page number */
         private long pageNum;
 
-        private int refCount = 0;
-
         /**  Constructor for the Page object */
         public Page() {
             header = createPageHeader();
@@ -862,10 +757,6 @@ public abstract class Paged {
             if(pageNum == Page.NO_PAGE)
                 {throw new IOException("Illegal page num: " + pageNum);}
             setPageNum(pageNum);
-        }
-
-        public void decRefCount() {
-            refCount--;
         }
 
         /**
@@ -903,30 +794,16 @@ public abstract class Paged {
             return pageNum;
         }
 
-        public int getRefCount() {
-            return refCount;
-        }
-
-        public int getDataPos() {
-            return fileHeader.pageHeaderSize;
-        }
-
-        public void incRefCount() {
-            refCount++;
-        }
-
         public byte[] read() throws IOException {
             try {
-                if (raf.getFilePointer() != offset) {
-                    raf.seek(offset);
-                }
+                store.seek(offset);
                 Arrays.fill(tempHeaderData, (byte)0);
-                raf.read(tempHeaderData);
+                store.read(tempHeaderData);
                 // Read in the header
                 header.read(tempHeaderData, 0);
                 // Read the working data
                 final byte[] workData = new byte[header.dataLen];
-                raf.read(workData);
+                store.read(workData);
                 return workData;
             } catch(final Exception e) {
                 LOG.warn("error while reading page: " + getPageInfo(), e);
@@ -960,9 +837,8 @@ public abstract class Paged {
                     System.arraycopy(data, 0, tempPageData, fileHeader.pageHeaderSize, data.length);
                 }
             }
-            if (raf.getFilePointer() != offset)
-                {raf.seek(offset);}
-            raf.write(tempPageData);
+            store.seek(offset);
+            store.write(tempPageData);
         }
 
         /* (non-Javadoc)
@@ -985,10 +861,9 @@ public abstract class Paged {
         }
 
         public void dumpPage() throws IOException {
-            if (raf.getFilePointer() != offset)
-                {raf.seek(offset);}
+            store.seek(offset);
             final byte[] data = new byte[fileHeader.pageSize];
-            raf.read(data);
+            store.read(data);
             LOG.debug("Contents of page " + pageNum + ": " + hexDump(data));
         }
     }
