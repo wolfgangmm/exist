@@ -45,5 +45,6 @@
   <typedef name="rmgroup" classname="org.exist.ant.RemoveGroupTask"/>
   <typedef name="lock" classname="org.exist.ant.LockResourceTask"/>
   <typedef name="password" classname="org.exist.ant.UserPasswordTask"/>
+  <typedef name="encrypt" classname="org.exist.source.ant.EncryptTask"/>
 </antlib>
 

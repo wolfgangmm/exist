@@ -21,13 +21,15 @@
  */
 package org.exist.source;
 
-import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.security.GeneralSecurityException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.dom.QName;
@@ -46,7 +48,9 @@ import org.exist.xmldb.XmldbURI;
  * @author wolf
  */
 public class DBSource extends AbstractSource {
-    
+
+    private final static Logger logger = LogManager.getLogger(DBSource.class);
+
     private final BinaryDocument doc;
     private final XmldbURI key;
     private final long lastModified;
@@ -128,8 +132,8 @@ public class DBSource extends AbstractSource {
      */
     @Override
     public Reader getReader() throws IOException {
-        final InputStream is = broker.getBinaryResource(doc);
-        final BufferedInputStream bis = new BufferedInputStream(is);
+        byte[] data = getData(doc);
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
         bis.mark(64);
         checkEncoding(bis);
         bis.reset();
@@ -138,7 +142,8 @@ public class DBSource extends AbstractSource {
 
     @Override
     public InputStream getInputStream() throws IOException {
-        return broker.getBinaryResource(doc);
+        byte[] data = getData(doc);
+        return new ByteArrayInputStream(data);
     }
 
     /* (non-Javadoc)
@@ -146,14 +151,7 @@ public class DBSource extends AbstractSource {
      */
     @Override
     public String getContent() throws IOException {
-        final InputStream raw = broker.getBinaryResource(doc);
-        final long binaryLength = broker.getBinaryResourceSize(doc);
-	if(binaryLength > (long)Integer.MAX_VALUE) {
-            throw new IOException("Resource too big to be read using this method.");
-	}
-        final byte [] data = new byte[(int)binaryLength];
-        raw.read(data);
-        raw.close();
+        final byte [] data = getData(doc);
         final ByteArrayInputStream is = new ByteArrayInputStream(data);
         checkEncoding(is);
         return new String(data, encoding);
@@ -161,14 +159,7 @@ public class DBSource extends AbstractSource {
 
     @Override
     public QName isModule() throws IOException {
-        final InputStream raw = broker.getBinaryResource(doc);
-        final long binaryLength = broker.getBinaryResourceSize(doc);
-        if(binaryLength > (long)Integer.MAX_VALUE) {
-            throw new IOException("Resource too big to be read using this method.");
-        }
-        final byte [] data = new byte[(int)binaryLength];
-        raw.read(data);
-        raw.close();
+        final byte [] data = getData(doc);
         final ByteArrayInputStream is = new ByteArrayInputStream(data);
         return getModuleDecl(is);
     }
@@ -200,5 +191,27 @@ public class DBSource extends AbstractSource {
     
     public Permission getPermissions() {
         return doc.getPermissions();
+    }
+
+    private byte[] getData(BinaryDocument doc) throws IOException {
+        final InputStream raw = broker.getBinaryResource(doc);
+        final long binaryLength = broker.getBinaryResourceSize(doc);
+        final byte [] data = new byte[(int)binaryLength];
+        raw.read(data);
+        raw.close();
+
+        String sig = new String(data, 0, 3);
+        if ("DES".equals(sig)) {
+            try {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Decrypting " + doc.getFileURI());
+                }
+                DESEncryption encryption = DESEncryption.getInstance();
+                return encryption.decrypt(data);
+            } catch (GeneralSecurityException e) {
+                throw new IOException("Error while decrypting source: " + e.getMessage(), e);
+            }
+        }
+        return data;
     }
 }
