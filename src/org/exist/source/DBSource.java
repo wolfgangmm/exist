@@ -206,7 +206,7 @@ public class DBSource extends AbstractSource {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Decrypting " + doc.getFileURI());
                 }
-                DESEncryption encryption = DESEncryption.getInstance();
+                SourceEncryption encryption = SourceEncryption.getInstance();
                 return encryption.decrypt(data);
             } catch (GeneralSecurityException e) {
                 throw new IOException("Error while decrypting source: " + e.getMessage(), e);
