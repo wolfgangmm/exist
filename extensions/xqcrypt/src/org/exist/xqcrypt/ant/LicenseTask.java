@@ -1,4 +1,4 @@
-package org.exist.source.ant;
+package org.exist.xqcrypt.ant;
 
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Task;

@@ -1,4 +1,4 @@
-package org.exist.xquery.modules.encrypt;
+package org.exist.xqcrypt;
 
 import org.exist.xquery.AbstractInternalModule;
 import org.exist.xquery.FunctionDef;

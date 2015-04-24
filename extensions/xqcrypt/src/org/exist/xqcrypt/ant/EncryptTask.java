@@ -1,11 +1,10 @@
-package org.exist.source.ant;
+package org.exist.xqcrypt.ant;
 
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.DirectoryScanner;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.FileSet;
-import org.exist.source.SourceEncryption;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherOutputStream;
@@ -23,7 +22,6 @@ import java.security.InvalidKeyException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Consumer;
 
 public class EncryptTask extends Task {
 

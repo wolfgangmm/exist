@@ -1,4 +1,4 @@
-package org.exist.xquery.modules.encrypt;
+package org.exist.xqcrypt;
 
 import org.exist.dom.QName;
 import org.exist.dom.persistent.BinaryDocument;
@@ -11,7 +11,6 @@ import org.exist.xquery.value.*;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherOutputStream;
-import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESKeySpec;
 import java.io.ByteArrayInputStream;
@@ -19,8 +18,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.*;
-import java.security.cert.CertificateException;
-import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 public class Encrypt extends BasicFunction {

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="license" name="licgen">
+
+    <property name="exist.dir" value="../../"/>
+
+    <property name="secret" value="My secret key"/>
+    <property name="keystore" value="${basedir}/layouter.jks"/>
+    <property name="keystore.pass" value="vergissmichnicht"/>
+
+    <path id="classpath.core">
+        <fileset dir="${exist.dir}/lib/core">
+            <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${exist.dir}/lib/optional">
+            <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${exist.dir}/exist.jar"/>
+        <pathelement path="${exist.dir}/exist-optional.jar"/>
+        <pathelement path="${exist.dir}/lib/extensions/exist-xqcrypt.jar"/>
+    </path>
+
+    <typedef resource="org/exist/xqcrypt/ant/antlib.xml" uri="http://exist-db.org/ant/xqcrypt">
+        <classpath refid="classpath.core"/>
+    </typedef>
+
+    <target name="init">
+        <delete file="${keystore}"/>
+        <genkey alias="r2e2.layouter" storepass="${keystore.pass}"
+            keysize="1024" keyalg="RSA" keystore="${keystore}"
+            keypass="${keystore.pass}">
+            <dname>
+                <param name="CN" value="r2e2"/>
+                <param name="O" value="r2e2.de"/>
+                <param name="C" value="DE"/>
+            </dname>
+        </genkey>
+    </target>
+
+    <target name="license" xmlns:crypt="http://exist-db.org/ant/xqcrypt">
+        <crypt:license keystore="${keystore}" storepass="${keystore.pass}"
+            alias="r2e2.layouter" output="${exist.dir}/license" secret="${secret}"/>
+    </target>
+</project>
