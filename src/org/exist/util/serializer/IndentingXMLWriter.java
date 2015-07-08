@@ -20,11 +20,14 @@
 package org.exist.util.serializer;
 
 import java.io.Writer;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
 import org.exist.dom.QName;
 import org.exist.storage.serializers.EXistOutputKeys;
+import org.exist.xquery.Option;
 
 public class IndentingXMLWriter extends XMLWriter {
 
@@ -34,6 +37,8 @@ public class IndentingXMLWriter extends XMLWriter {
     private int level = 0;
     private boolean afterTag = false;
     private boolean sameline = false;
+    private Set<javax.xml.namespace.QName> cdataSectionElements = null;
+    private boolean inCDATASection = false;
 
     public IndentingXMLWriter() {
         super();
@@ -69,6 +74,7 @@ public class IndentingXMLWriter extends XMLWriter {
         addIndent();
         afterTag = true;
         sameline = true;
+        inCDATASection = createCDATA(namespaceURI, localName);
     }
     
     /* (non-Javadoc)
@@ -83,6 +89,7 @@ public class IndentingXMLWriter extends XMLWriter {
         addIndent();
         afterTag = true;
         sameline = true;
+        inCDATASection = createCDATA(qname.getNamespaceURI(), qname.getLocalPart());
     }
 
     /* (non-Javadoc)
@@ -94,6 +101,7 @@ public class IndentingXMLWriter extends XMLWriter {
         super.endElement(namespaceURI, localName, qname);
         sameline = false;
         afterTag = true;
+        inCDATASection = false;
     }
 
     /* (non-Javadoc)
@@ -105,6 +113,7 @@ public class IndentingXMLWriter extends XMLWriter {
         super.endElement(qname);
         sameline = false;
         afterTag = true;
+        inCDATASection = false;
     }
 
     /* (non-Javadoc)
@@ -112,6 +121,10 @@ public class IndentingXMLWriter extends XMLWriter {
      */
     @Override
     public void characters(CharSequence chars) throws TransformerException {
+        if (inCDATASection) {
+            cdataSection(chars.toString().toCharArray(), 0, chars.length());
+            return;
+        }
         final int start = 0, length = chars.length();
         //while (length > 0 && isWhiteSpace(chars.charAt(start))) {
             //--length;
@@ -174,6 +187,13 @@ public class IndentingXMLWriter extends XMLWriter {
             //Nothing to do ?
         }
         indent = "yes".equals(outputProperties.getProperty(OutputKeys.INDENT, "no"));
+        final String cdataElements = outputProperties.getProperty(OutputKeys.CDATA_SECTION_ELEMENTS);
+        if (cdataElements != null) {
+            cdataSectionElements = new HashSet<>();
+            for (String name : Option.tokenize(cdataElements)) {
+                cdataSectionElements.add(javax.xml.namespace.QName.valueOf(name));
+            }
+        }
     }
 
     protected boolean isInlineTag(final String namespaceURI, final String localName) {
@@ -202,6 +222,13 @@ public class IndentingXMLWriter extends XMLWriter {
         if (afterTag && !sameline && !isInlineTag(namespaceURI, localName)){
             indent();
         }
+    }
+
+    protected boolean createCDATA(String namespaceURI, String localName) {
+        if (cdataSectionElements == null) {
+            return false;
+        }
+        return cdataSectionElements.contains(new javax.xml.namespace.QName(namespaceURI, localName));
     }
 
     protected static boolean isWhiteSpace(final char ch) {

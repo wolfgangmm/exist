@@ -28,24 +28,14 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.Collator;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.SimpleTimeZone;
-import java.util.Stack;
-import java.util.TimeZone;
-import java.util.TreeMap;
+import java.util.*;
 
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.stream.XMLStreamException;
+import javax.xml.transform.OutputKeys;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -3137,9 +3127,9 @@ public class XQueryContext implements BinaryValueManager, Context
             // configure profiling
             profiler.configure( option );
         } else if( Option.TIMEOUT_QNAME.compareTo( qn ) == 0 ) {
-            watchdog.setTimeoutFromOption( option );
+            watchdog.setTimeoutFromOption(option);
         } else if( Option.OUTPUT_SIZE_QNAME.compareTo( qn ) == 0 ) {
-            watchdog.setMaxNodesFromOption( option );
+            watchdog.setMaxNodesFromOption(option);
         } else if( Option.OPTIMIZE_QNAME.compareTo( qn ) == 0 ) {
             final String[] params = option.tokenizeContents();
 
@@ -3160,7 +3150,7 @@ public class XQueryContext implements BinaryValueManager, Context
         else if( Option.OPTIMIZE_IMPLICIT_TIMEZONE.compareTo( qn ) == 0 ) {
 
             //TODO : error check
-            final Duration duration = TimeUtils.getInstance().newDuration( option.getContents() );
+            final Duration duration = TimeUtils.getInstance().newDuration(option.getContents());
             implicitTimeZone = new SimpleTimeZone( (int)duration.getTimeInMillis( new Date() ), "XQuery context" );
         } else if( Option.CURRENT_DATETIME.compareTo( qn ) == 0 ) {
 
@@ -3412,7 +3402,7 @@ public class XQueryContext implements BinaryValueManager, Context
         if( updateListener == null ) {
             updateListener = new ContextUpdateListener();
             final DBBroker broker = getBroker();
-            broker.getBrokerPool().getNotificationService().subscribe( updateListener );
+            broker.getBrokerPool().getNotificationService().subscribe(updateListener);
         }
         updateListener.addListener( listener );
     }
@@ -3422,7 +3412,7 @@ public class XQueryContext implements BinaryValueManager, Context
     {
         if( updateListener != null ) {
             final DBBroker broker = getBroker();
-            broker.getBrokerPool().getNotificationService().unsubscribe( updateListener );
+            broker.getBrokerPool().getNotificationService().unsubscribe(updateListener);
         }
         updateListener = null;
     }
@@ -3452,6 +3442,21 @@ public class XQueryContext implements BinaryValueManager, Context
                         {properties.put(option.getQName().getLocalPart(), option.getContents());}
                 }
             }
+        }
+        final String cdataSections = properties.getProperty(OutputKeys.CDATA_SECTION_ELEMENTS);
+        if (cdataSections != null) {
+            final StringBuilder parsed = new StringBuilder();
+            for (String name: Option.tokenize(cdataSections)) {
+                if (parsed.length() > 0) {
+                    parsed.append(' ');
+                }
+                final QName qname = QName.parse(this, name);
+                if (qname.hasNamespace()) {
+                    parsed.append('{').append(qname.getNamespaceURI()).append('}');
+                }
+                parsed.append(qname.getLocalPart());
+            }
+            properties.setProperty(OutputKeys.CDATA_SECTION_ELEMENTS, parsed.toString());
         }
     }
 
