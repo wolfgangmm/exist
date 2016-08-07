@@ -921,7 +921,7 @@ public abstract class Serializer implements XMLReader {
             attrs.addAttribute(ATTR_SESSION_ID, outputProperties.getProperty(PROPERTY_SESSION_ID));
         }
 		attrs.addAttribute(ATTR_COMPILATION_TIME_QNAME, Long.toString(compilationTime));
-		attrs.addAttribute(ATTR_EXECUTION_TIME_QNAME, Long.toString(compilationTime));
+		attrs.addAttribute(ATTR_EXECUTION_TIME_QNAME, Long.toString(executionTime));
 
 		receiver.startDocument();
 		if(wrap) {
