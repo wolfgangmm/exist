@@ -31,6 +31,11 @@ fi
 
 JAVA_ENDORSED_DIRS="$EXIST_HOME"/lib/endorsed
 
+# rem make sure there's the jetty tmp directory
+if [ ! -d "$EXIST_HOME/tools/jetty/tmp" ]; then
+    mkdir "$EXIST_HOME/tools/jetty/tmp"
+fi
+
 "$JAVA_CMD" $JAVA_OPTIONS $OPTIONS \
     -Djava.endorsed.dirs=$JAVA_ENDORSED_DIRS \
     -jar "$EXIST_HOME/start.jar" org.exist.installer.Setup $*
