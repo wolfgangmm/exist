@@ -40,6 +40,7 @@ import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.NumericUtils;
+import org.exist.Namespaces;
 import org.exist.collections.Collection;
 import org.exist.dom.QName;
 import org.exist.dom.memtree.MemTreeBuilder;
@@ -49,6 +50,7 @@ import org.exist.indexing.*;
 import org.exist.indexing.StreamListener.ReindexMode;
 import org.exist.indexing.lucene.PlainTextHighlighter.Offset;
 import org.exist.indexing.lucene.PlainTextIndexConfig.PlainTextField;
+import org.exist.indexing.lucene.analyzers.MetaAnalyzer;
 import org.exist.indexing.lucene.suggest.LuceneSuggest;
 import org.exist.numbering.NodeId;
 import org.exist.security.PermissionDeniedException;
@@ -83,6 +85,8 @@ import java.util.*;
  * @author Leif-Jöran Olsson (ljo@exist-db.org)
  */
 public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
+
+    public static final String DEFAULT_ANALYZER_LANG = "en";
 
     public static final org.apache.lucene.document.FieldType TYPE_NODE_ID = new org.apache.lucene.document.FieldType();
     static {
@@ -437,6 +441,9 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 String field = LuceneUtil.encodeQName(qname, index.getBrokerPool().getSymbols());
                 LuceneConfig config = getLuceneConfig(broker, docs);
                 Analyzer analyzer = getAnalyzer(config,null, qname);
+                if (analyzer instanceof MetaAnalyzer && options != null) {
+                    ((MetaAnalyzer) analyzer).setLanguage(options.getProperty("lang", "en"));
+                }
                 Query query;
                 if (queryStr == null) {
                     query = new ConstantScoreQuery(new FieldValueFilter(field));
@@ -484,6 +491,9 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 String field = LuceneUtil.encodeQName(qname, index.getBrokerPool().getSymbols());
                 LuceneConfig config = getLuceneConfig(broker, docs);
                 analyzer = getAnalyzer(config, null, qname);
+                if (analyzer instanceof MetaAnalyzer && options != null) {
+                    ((MetaAnalyzer) analyzer).setLanguage(options.getProperty("lang", "en"));
+                }
                 Query query = queryRoot == null ? new ConstantScoreQuery(new FieldValueFilter(field)) : queryTranslator.parse(field, queryRoot, analyzer, options);
                 Optional<Map<String, List<String>>> facets = options.getFacets();
                 if (facets.isPresent() && config != null) {
@@ -1236,8 +1246,8 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
      * @param qname
      * @param content
      */
-    protected void indexText(NodeId nodeId, QName qname, NodePath path, LuceneIndexConfig config, CharSequence content) {
-        PendingDoc pending = new PendingDoc(nodeId, qname, path, content, config.getBoost(), config);
+    protected void indexText(NodeId nodeId, QName qname, NodePath path, LuceneIndexConfig config, CharSequence content, String analyzerLang) {
+        PendingDoc pending = new PendingDoc(nodeId, qname, path, content, config.getBoost(), config, analyzerLang);
         addPending(pending);
     }
 
@@ -1252,8 +1262,8 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
      * @param config
      * @param content
      */
-    protected void indexText(java.util.Collection<AttrImpl> attribs, NodeId nodeId, QName qname, NodePath path, LuceneIndexConfig config, CharSequence content) {
-        PendingDoc pending = new PendingDoc(nodeId, qname, path, content, config.getAttrBoost(attribs), config);
+    protected void indexText(java.util.Collection<AttrImpl> attribs, NodeId nodeId, QName qname, NodePath path, LuceneIndexConfig config, CharSequence content, String analyzerLang) {
+        PendingDoc pending = new PendingDoc(nodeId, qname, path, content, config.getAttrBoost(attribs), config, analyzerLang);
         addPending(pending);
     }
     
@@ -1272,15 +1282,17 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
         private final CharSequence text;
         private final float boost;
         private final LuceneIndexConfig idxConf;
+        private final String lang;
 
         private PendingDoc(final NodeId nodeId, final QName qname, final NodePath path, final CharSequence text,
-                final float boost, final LuceneIndexConfig idxConf) {
+                final float boost, final LuceneIndexConfig idxConf, String analyzerLang) {
             this.nodeId = nodeId;
             this.qname = qname;
             this.path = path;
             this.text = text;
             this.idxConf = idxConf;
             this.boost = boost;
+            this.lang = analyzerLang;
         }
     }
 
@@ -1288,11 +1300,13 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
 	    private final AttrImpl attr;
 	    private final LuceneIndexConfig conf;
 	    private final NodePath path;
+        private final String lang;
 
-        public PendingAttr(final AttrImpl attr, final NodePath path, final LuceneIndexConfig conf) {
+        public PendingAttr(final AttrImpl attr, final NodePath path, final LuceneIndexConfig conf, String analyzerLang) {
             this.attr = attr;
             this.conf = conf;
             this.path = path;
+            this.lang = analyzerLang;
         }
     }
     
@@ -1392,7 +1406,11 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 if (pending.idxConf.getAnalyzer() == null) {
                     writer.addDocument(config.facetsConfig.build(index.getTaxonomyWriter(), doc));
                 } else {
-                    writer.addDocument(config.facetsConfig.build(index.getTaxonomyWriter(), doc), pending.idxConf.getAnalyzer());
+                    Analyzer analyzer = pending.idxConf.getAnalyzer();
+                    if (analyzer instanceof MetaAnalyzer) {
+                        ((MetaAnalyzer) analyzer).setLanguage(pending.lang);
+                    }
+                    writer.addDocument(config.facetsConfig.build(index.getTaxonomyWriter(), doc), analyzer);
 		        }
 	        }
         } catch (final IOException e) {
@@ -1425,6 +1443,7 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
         private ArrayList<PendingAttr> pendingAttrs = new ArrayList<PendingAttr>();
 	private ArrayList<AttrImpl> attributes = new ArrayList<AttrImpl>(10);
         private ElementImpl currentElement;
+        private String analyzerLang = DEFAULT_ANALYZER_LANG;
 
         @Override
         public void startReplaceDocument(Txn transaction) {
@@ -1500,8 +1519,8 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
 
                                 if (configuration.shouldReindexOnAttributeChange()) {
                                     // if we still have the attributes cached
-				    // i e this element had no child elements,
-				    // use them to save some time
+                                    // i e this element had no child elements,
+                                    // use them to save some time
                                     // otherwise we fetch the attributes again
                                     boolean wasEmpty = false;
                                     if (attributes.isEmpty()) {
@@ -1511,13 +1530,13 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                                             attributes.add((AttrImpl) attributes1.item(i));
                                         }
                                     }
-                                    indexText(attributes, element.getNodeId(), element.getQName(), path, extractor.getIndexConfig(), extractor.getText());
+                                    indexText(attributes, element.getNodeId(), element.getQName(), path, extractor.getIndexConfig(), extractor.getText(), analyzerLang);
                                     if (wasEmpty) {
                                         attributes.clear();
                                     }
                                 } else {
                                     // no attribute matching, index normally
-                                    indexText(element.getNodeId(), element.getQName(), path, extractor.getIndexConfig(), extractor.getText());
+                                    indexText(element.getNodeId(), element.getQName(), path, extractor.getIndexConfig(), extractor.getText(), analyzerLang);
                                 }
                             }
                         }
@@ -1535,6 +1554,11 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
         public void attribute(Txn transaction, AttrImpl attrib, NodePath path) {
             path.addComponent(attrib.getQName());
 
+            if (attrib.getQName().getLocalPart().equals("lang") &&
+                    attrib.getQName().getNamespaceURI().equals(Namespaces.XML_NS) ) {
+                analyzerLang = attrib.getValue();
+            }
+
             AttrImpl attribCopy = null;
             if (mode == ReindexMode.STORE && currentElement != null) {
                 attribCopy = (AttrImpl) NodePool.getInstance().borrowNode(Node.ATTRIBUTE_NODE);
@@ -1545,8 +1569,10 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
             }
 
             Iterator<LuceneIndexConfig> configIter = null;
-            if (config != null)
+            if (config != null) {
                 configIter = config.getConfig(path);
+            }
+
             if (mode != ReindexMode.REMOVE_ALL_NODES && configIter != null) {
                 if (mode == ReindexMode.REMOVE_SOME_NODES) {
                     nodesToRemove.add(attrib.getNodeId());
@@ -1554,11 +1580,11 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                     while (configIter.hasNext()) {
                         LuceneIndexConfig configuration = configIter.next();
                         if (configuration.match(path)) {
-			    if (configuration.shouldReindexOnAttributeChange()) {
-				appendAttrToBeIndexedLater(attribCopy, new NodePath(path), configuration);
-			    } else {
-				indexText(attrib.getNodeId(), attrib.getQName(), path, configuration, attrib.getValue());
-			    }
+                            if (configuration.shouldReindexOnAttributeChange()) {
+                                appendAttrToBeIndexedLater(attribCopy, new NodePath(path), configuration);
+                            } else {
+                                indexText(attrib.getNodeId(), attrib.getQName(), path, configuration, attrib.getValue(), analyzerLang);
+                            }
                         }
                     }
                 }
@@ -1591,7 +1617,7 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
             if (currentElement == null){
                 LOG.error("currentElement == null");
             } else {
-                pendingAttrs.add(new PendingAttr(attr, path, conf));
+                pendingAttrs.add(new PendingAttr(attr, path, conf, analyzerLang));
 	    }
         }
 
@@ -1604,7 +1630,7 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 if (mode == ReindexMode.STORE && config != null) {
                     for (PendingAttr pending : pendingAttrs) {
                         AttrImpl attr = pending.attr;
-                        indexText(attributes, attr.getNodeId(), attr.getQName(), pending.path, pending.conf, attr.getValue());
+                        indexText(attributes, attr.getNodeId(), attr.getQName(), pending.path, pending.conf, attr.getValue(), analyzerLang);
                     }
                 }
             } finally {
@@ -1622,6 +1648,10 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
 		attributes.clear();
 	    }
 	}
+
+	    protected void reset() {
+	        analyzerLang = DEFAULT_ANALYZER_LANG;
+        }
     }
 
 }
