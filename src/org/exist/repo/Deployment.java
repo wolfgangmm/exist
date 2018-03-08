@@ -786,23 +786,31 @@ public class Deployment {
 
                 try(final Txn transaction = mgr.beginTransaction()) {
                     if (mime.isXMLType()) {
+                        final InputSource is = new FileInputSource(file);
+                        final IndexInfo info;
                         try {
-                            final InputSource is = new InputSource(file.toUri().toASCIIString());
-                            final IndexInfo info = targetCollection.validateXMLResource(transaction, broker, name, is);
-                            info.getDocument().getMetadata().setMimeType(mime.getName());
-                            final Permission permission = info.getDocument().getPermissions();
-                            setPermissions(requestedPerms, false, mime, permission);
-
-                            targetCollection.store(transaction, broker, info, is);
-                        } catch (Exception e) {
+                            info = targetCollection.validateXMLResource(transaction, broker, name, is);
+                        } catch (EXistException | PermissionDeniedException | LockException | SAXException | IOException e) {
                             //check for .html ending
                             if(mime.getName().equals(MimeType.HTML_TYPE.getName())){
                                 //store it
                                 storeBinary(targetCollection, file, mime, name, requestedPerms, transaction);
+                                transaction.commit();
+                                return;
                             } else {
+                                LOG.error(e.getMessage(), e);
                                 errors.add(FileUtils.fileName(file) + ": " + e.getMessage());
+                                return;
                             }
                         }
+                        info.getDocument().getMetadata().setMimeType(mime.getName());
+                        if (info.getDocument().getChildCount() == 0) {
+                            throw new RuntimeException("child count for document is 0: " + name);
+                        }
+                        final Permission permission = info.getDocument().getPermissions();
+                        setPermissions(requestedPerms, false, mime, permission);
+
+                        targetCollection.store(transaction, broker, info, is);
                     } else {
                         final long size = Files.size(file);
                         try(final InputStream is = Files.newInputStream(file)) {
@@ -816,7 +824,7 @@ public class Deployment {
                         }
                     }
                     mgr.commit(transaction);
-                } catch (final EXistException | PermissionDeniedException | LockException | TriggerException | IOException e) {
+                } catch (final SAXException | EXistException | PermissionDeniedException | LockException | IOException e) {
                     LOG.error(e.getMessage(), e);
                     errors.add(FileUtils.fileName(file) + ": " + e.getMessage());
                 }

@@ -2051,8 +2051,9 @@ public class NativeBroker extends DBBroker {
      */
     @Override
     public void storeXMLResource(final Txn transaction, final DocumentImpl doc) {
-
-
+        if (doc.getResourceType() == DocumentImpl.XML_FILE && doc.getChildCount() == 0) {
+            throw new RuntimeException("Child count is 0 for doc: " + doc.getFileURI());
+        }
         final Lock lock = collectionsDb.getLock();
         try(final VariableByteOutputStream os = new VariableByteOutputStream(8)) {
             lock.acquire(LockMode.WRITE_LOCK);
