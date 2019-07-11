@@ -53,6 +53,7 @@ import org.exist.security.PermissionDeniedException;
 import org.exist.storage.*;
 import org.exist.storage.btree.DBException;
 import org.exist.storage.lock.Lock.LockMode;
+import org.exist.storage.lock.LockedDocumentMap;
 import org.exist.storage.txn.Txn;
 import org.exist.util.ByteConversion;
 import org.exist.util.DatabaseConfigurationException;
@@ -740,9 +741,11 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
             // document is in a collection
             if (isDocumentMatch(fDocUri, toBeMatchedURIs)) {
 
-                try(final LockedDocument lockedStoredDoc = broker.getXMLResource(XmldbURI.createInternal(fDocUri), LockMode.READ_LOCK)) {
+                DocumentImpl storedDoc = null;
+                try {
+                    storedDoc = broker.getXMLResource(XmldbURI.createInternal(fDocUri), LockMode.READ_LOCK);
                     // try to read document to check if user is allowed to access it
-                    if (lockedStoredDoc == null) {
+                    if (storedDoc == null) {
                         return;
                     }
 
@@ -774,6 +777,10 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                     attribs.clear();
                 } catch (PermissionDeniedException e) {
                     // not allowed to read the document: ignore the match.
+                } finally {
+                    if (storedDoc != null) {
+                        storedDoc.getUpdateLock().release(LockMode.READ_LOCK);
+                    }
                 }
             }
         }
