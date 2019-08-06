@@ -16,5 +16,6 @@
         <dependency org="org.apache.lucene" name="lucene-queries" rev="&lucene.version;" conf="*->default"/>
 	    <dependency org="org.apache.lucene" name="lucene-queryparser" rev="&lucene.version;" conf="*->default"/>
         <dependency org="org.apache.lucene" name="lucene-facet" rev="&lucene.version;" conf="*->default"/>
+        <dependency org="org.apache.lucene" name="lucene-suggest" rev="&lucene.version;" conf="*->default"/>
     </dependencies>
 </ivy-module>
