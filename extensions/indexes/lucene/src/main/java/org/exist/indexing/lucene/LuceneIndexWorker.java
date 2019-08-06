@@ -51,13 +51,13 @@ import org.exist.indexing.StreamListener.ReindexMode;
 import org.exist.indexing.lucene.PlainTextHighlighter.Offset;
 import org.exist.indexing.lucene.PlainTextIndexConfig.PlainTextField;
 import org.exist.indexing.lucene.analyzers.MetaAnalyzer;
+import org.exist.indexing.lucene.analyzers.MultiLanguageAnalyzer;
 import org.exist.indexing.lucene.suggest.LuceneSuggest;
 import org.exist.numbering.NodeId;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.*;
 import org.exist.storage.btree.DBException;
 import org.exist.storage.lock.Lock.LockMode;
-import org.exist.storage.lock.LockedDocumentMap;
 import org.exist.storage.txn.Txn;
 import org.exist.util.ByteConversion;
 import org.exist.util.DatabaseConfigurationException;
@@ -65,9 +65,13 @@ import org.exist.util.LockException;
 import org.exist.util.Occurrences;
 import org.exist.util.pool.NodePool;
 import org.exist.xmldb.XmldbURI;
-import org.exist.xquery.*;
+import org.exist.xquery.Expression;
+import org.exist.xquery.QueryRewriter;
+import org.exist.xquery.XPathException;
+import org.exist.xquery.XQueryContext;
 import org.exist.xquery.modules.lucene.QueryOptions;
-import org.exist.xquery.value.*;
+import org.exist.xquery.value.IntegerValue;
+import org.exist.xquery.value.NodeValue;
 import org.w3c.dom.*;
 import org.xml.sax.helpers.AttributesImpl;
 
@@ -442,7 +446,7 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 LuceneConfig config = getLuceneConfig(broker, docs);
                 Analyzer analyzer = getAnalyzer(config,null, qname);
                 if (analyzer instanceof MetaAnalyzer && options != null) {
-                    ((MetaAnalyzer) analyzer).setLanguage(options.getProperty("lang", "en"));
+                    ((MetaAnalyzer) analyzer).setLanguage(options.getLanguage("en"));
                 }
                 Query query;
                 if (queryStr == null) {
@@ -492,7 +496,7 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                 LuceneConfig config = getLuceneConfig(broker, docs);
                 analyzer = getAnalyzer(config, null, qname);
                 if (analyzer instanceof MetaAnalyzer && options != null) {
-                    ((MetaAnalyzer) analyzer).setLanguage(options.getProperty("lang", "en"));
+                    ((MetaAnalyzer) analyzer).setLanguage(options.getLanguage("en"));
                 }
                 Query query = queryRoot == null ? new ConstantScoreQuery(new FieldValueFilter(field)) : queryTranslator.parse(field, queryRoot, analyzer, options);
                 Optional<Map<String, List<String>>> facets = options.getFacets();
@@ -1407,8 +1411,8 @@ public class LuceneIndexWorker implements OrderedValuesIndex, QNamedKeysIndex {
                     writer.addDocument(config.facetsConfig.build(index.getTaxonomyWriter(), doc));
                 } else {
                     Analyzer analyzer = pending.idxConf.getAnalyzer();
-                    if (analyzer instanceof MetaAnalyzer) {
-                        ((MetaAnalyzer) analyzer).setLanguage(pending.lang);
+                    if (analyzer instanceof MultiLanguageAnalyzer) {
+                        ((MultiLanguageAnalyzer) analyzer).setLanguage(pending.lang);
                     }
                     writer.addDocument(config.facetsConfig.build(index.getTaxonomyWriter(), doc), analyzer);
 		        }

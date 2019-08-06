@@ -9,7 +9,7 @@ declare variable $ftt:COLLECTION_CONFIG :=
     <collection xmlns="http://exist-db.org/collection-config/1.0">
         <index xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <lucene>
-                <analyzer class="org.exist.indexing.lucene.analyzers.MetaAnalyzer"/>
+                <analyzer class="org.exist.indexing.lucene.analyzers.MultiLanguageAnalyzer"/>
                 <text qname="div" />
                 <text qname="p" />
             </lucene>

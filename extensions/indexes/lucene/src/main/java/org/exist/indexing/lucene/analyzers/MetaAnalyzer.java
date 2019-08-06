@@ -57,6 +57,17 @@ public class MetaAnalyzer extends DelegatingAnalyzerWrapper {
         return perFieldAnalyzers.getOrDefault(fieldName, defaultAnalyzer);
     }
 
+    public void setLanguage(String language) {
+        if (defaultAnalyzer instanceof MultiLanguageAnalyzer) {
+            ((MultiLanguageAnalyzer)defaultAnalyzer).setLanguage(language);
+        }
+        perFieldAnalyzers.values().forEach((analyzer -> {
+            if (analyzer instanceof MultiLanguageAnalyzer) {
+                ((MultiLanguageAnalyzer)analyzer).setLanguage(language);
+            }
+        }));
+    }
+
     public String toString() {
         return "MetaAnalyzer(" + this.perFieldAnalyzers + ", default=" + this.defaultAnalyzer + ")";
     }

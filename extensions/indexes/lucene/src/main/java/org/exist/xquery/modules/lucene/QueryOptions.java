@@ -45,6 +45,7 @@ public class QueryOptions {
     public static final String OPTION_PHRASE_SLOP = "phrase-slop";
     public static final String OPTION_LEADING_WILDCARD = "leading-wildcard";
     public static final String OPTION_FILTER_REWRITE = "filter-rewrite";
+    public static final String OPTION_LANGUAGE = "lang";
     public static final String DEFAULT_OPERATOR_OR = "or";
     public static final String OPTION_LOWERCASE_EXPANDED_TERMS = "lowercase-expanded-terms";
     public static final String OPTION_FACETS = "facets";
@@ -58,7 +59,7 @@ public class QueryOptions {
     protected DefaultOperator defaultOperator = DefaultOperator.AND;
     protected boolean allowLeadingWildcard = false;
     protected Optional<Integer> phraseSlop = Optional.empty();
-
+    protected Optional<String> language = Optional.empty();
     protected boolean filterRewrite = false;
     protected boolean lowercaseExpandedTerms = false;
     protected Optional<Map<String, List<String>>> facets = Optional.empty();
@@ -128,6 +129,10 @@ public class QueryOptions {
         return filterRewrite;
     }
 
+    public String getLanguage(String defaultLang) {
+        return language.orElse(defaultLang);
+    }
+
     private void set(String key, String value) throws XPathException {
         switch (key) {
             case OPTION_DEFAULT_OPERATOR:
@@ -137,6 +142,9 @@ public class QueryOptions {
                 break;
             case OPTION_LEADING_WILDCARD:
                 allowLeadingWildcard = value.equalsIgnoreCase("yes");
+                break;
+            case OPTION_LANGUAGE:
+                language = Optional.of(value);
                 break;
             case OPTION_PHRASE_SLOP:
                 try {
